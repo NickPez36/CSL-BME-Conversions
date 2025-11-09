@@ -1,1 +1,609 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athlete Pathway Analysis</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* Use the Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Custom scrollbar for aesthetics */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748; /* gray-800 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #718096; /* gray-500 */
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0; /* gray-400 */
+        }
 
+        /* Chart.js dark mode defaults */
+        Chart.defaults.color = '#cbd5e0'; /* gray-400 */
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col items-center p-4 md:p-8" style="font-family: 'Inter', sans-serif;">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-7xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-white text-center">Athlete Pathway Analysis</h1>
+            <p class="text-center text-lg text-gray-400 mt-2">U23 to Senior Performance Conversion</p>
+        </header>
+
+        <!-- Loading Spinner -->
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-gray-300 mt-4 text-lg">Loading athlete data from GitHub...</p>
+        </div>
+
+        <!-- Error Message Box -->
+        <div id="error-state" class="hidden bg-red-800 border border-red-600 text-white px-6 py-4 rounded-lg shadow-lg" role="alert">
+            <h3 class="font-bold text-xl">Data Load Failed</h3>
+            <p class="mt-2" id="error-message">Could not load data from the repository.</p>
+            <p class="text-sm text-red-200 mt-2">
+                Please ensure the repository 'NickPez36/CSL-BME-Conversions' is public and the file paths are correct.
+                The file and repository names (including spaces) must be exact.
+            </p>
+        </div>
+
+        <!-- Main Dashboard (hidden by default) -->
+        <main id="dashboard" class="hidden">
+            
+            <!-- Controls -->
+            <div class="mb-6 bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-center">
+                <label for="class-selector" class="text-lg font-medium mr-4">Select Athlete Class:</label>
+                <select id="class-selector" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                <!-- Section 1: U23 -> Senior -->
+                <section class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-6 text-center text-blue-300">
+                        Part 1: U23 Performance to Senior Medal
+                    </h2>
+                    <p class="text-center text-gray-400 mb-6 -mt-4">
+                        What percentage of U23 athletes (by rank) go on to win a Senior/Olympic medal (Top 3)?
+                    </p>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-blue-400" id="stat-u23-3">--%</div>
+                            <div class="text-sm text-gray-400">U23 Top 3</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-blue-400" id="stat-u23-5">--%</div>
+                            <div class="text-sm text-gray-400">U23 Top 5</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-blue-400" id="stat-u23-8">--%</div>
+                            <div class="text-sm text-gray-400">U23 Top 8</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-blue-400" id="stat-u23-12">--%</div>
+                            <div class="text-sm text-gray-400">U23 Top 12</div>
+                        </div>
+                    </div>
+                    <div>
+                        <canvas id="chart-u23-to-senior"></canvas>
+                    </div>
+
+                    <!-- NEW: Athlete Table for Part 1 -->
+                    <h3 class="text-lg font-semibold mt-8 mb-2 text-center text-gray-300">Converted Athletes (U23 Top 12 → Senior Medal)</h3>
+                    <div class="h-64 overflow-y-auto bg-gray-900 rounded-lg border border-gray-700">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-800 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Athlete</th>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nation</th>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Best U23 Rank</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-u23-body" class="divide-y divide-gray-700">
+                                <!-- JS will populate -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Section 2: Senior -> U23 -->
+                <section class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-6 text-center text-green-300">
+                        Part 2: Senior Performance to U23 Rank
+                    </h2>
+                    <p class="text-center text-gray-400 mb-6 -mt-4">
+                        For Senior/Olympic athletes (2016-2025), what was their average rank at the U23 level?
+                    </p>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-green-400" id="stat-snr-3">--</div>
+                            <div class="text-sm text-gray-400">Senior Top 3</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-green-400" id="stat-snr-5">--</div>
+                            <div class="text-sm text-gray-400">Senior Top 5</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-green-400" id="stat-snr-12">--</div>
+                            <div class="text-sm text-gray-400">Senior Top 12</div>
+                        </div>
+                        <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                            <div class="text-4xl font-bold text-green-400" id="stat-snr-16">--</div>
+                            <div class="text-sm text-gray-400">Senior Top 16</div>
+                        </div>
+                    </div>
+                    <div>
+                        <canvas id="chart-senior-to-u23"></canvas>
+                    </div>
+
+                    <!-- NEW: Athlete Table for Part 2 -->
+                    <h3 class="text-lg font-semibold mt-8 mb-2 text-center text-gray-300">Senior Performers (Top 16, 2016-25) & U23 Ranks</h3>
+                    <div class="h-64 overflow-y-auto bg-gray-900 rounded-lg border border-gray-700">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-800 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Athlete</th>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nation</th>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Best Senior Rank</th>
+                                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Best U23 Rank</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-snr-body" class="divide-y divide-gray-700">
+                                <!-- JS will populate -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        // Data URLs from GitHub via jsDelivr CDN
+        // Note: Spaces in repo and file names are fragile.
+        // 'CSL BME Conversions' -> 'CSL-BME-Conversions' (GitHub repo URL convention)
+        // ' ' -> '%20' (URL encoding for spaces in filenames)
+        const BASE_URL = 'https://cdn.jsdelivr.net/gh/NickPez36/CSL-BME-Conversions@main/data/';
+        const URLS = {
+            jnr: BASE_URL + 'JNR%20Worlds%20Overall%20Results.json',
+            u23: BASE_URL + 'U23%20Worlds%20Overall%20Results.json',
+            snr: BASE_URL + 'SNR%20Worlds%20Overall%20Results.json',
+            og: BASE_URL + 'OG%20Overall%20Results.json'
+        };
+
+        // Global state
+        const allData = {
+            jnr: [],
+            u23: [],
+            snr: [],
+            og: []
+        };
+        let allClasses = new Set();
+        let currentClass = 'All Classes';
+        const charts = {
+            u23ToSenior: null,
+            seniorToU23: null
+        };
+
+        // DOM Elements
+        const loadingEl = document.getElementById('loading-state');
+        const errorEl = document.getElementById('error-state');
+        const errorMsgEl = document.getElementById('error-message');
+        const dashboardEl = document.getElementById('dashboard');
+        const classSelector = document.getElementById('class-selector');
+
+        /**
+         * Wait for DOM to load, then fetch data
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+            classSelector.addEventListener('change', onClassChange);
+        });
+
+        /**
+         * Fetch all JSON data files from GitHub
+         */
+        async function loadAllData() {
+            try {
+                loadingEl.style.display = 'flex';
+                errorEl.style.display = 'none';
+
+                const [jnrRes, u23Res, snrRes, ogRes] = await Promise.all([
+                    fetch(URLS.jnr),
+                    fetch(URLS.u23),
+                    fetch(URLS.snr),
+                    fetch(URLS.og)
+                ]);
+
+                const responses = [jnrRes, u23Res, snrRes, ogRes];
+                const failed = responses.find(res => !res.ok);
+                
+                if (failed) {
+                    throw new Error(`Failed to fetch: ${failed.url} (${failed.status} ${failed.statusText})`);
+                }
+
+                const [jnrData, u23Data, snrData, ogData] = await Promise.all(responses.map(res => res.json()));
+
+                // Store data and clean it (ensure Rank is a number)
+                allData.jnr = cleanData(jnrData);
+                allData.u23 = cleanData(u23Data);
+                allData.snr = cleanData(snrData);
+                allData.og = cleanData(ogData);
+
+                // Populate class selector
+                populateClasses();
+
+                // Run initial analysis
+                runAnalysis();
+
+                // Show dashboard
+                loadingEl.style.display = 'none';
+                dashboardEl.style.display = 'block';
+
+            } catch (error) {
+                console.error("Data loading error:", error);
+                loadingEl.style.display = 'none';
+                errorMsgEl.textContent = error.message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        /**
+         * Clean raw data:
+         * - Ensure 'Rank' is a number
+         * - Collect all 'Class' values
+         */
+        function cleanData(data) {
+            if (!Array.isArray(data)) {
+                console.warn("Expected an array from JSON but got:", data);
+                return [];
+            }
+            return data.map(row => {
+                if (row.Class) {
+                    allClasses.add(row.Class);
+                }
+                // Convert Rank to number, handle 'DQ', 'DNF' etc. as Infinity
+                const rankNum = parseInt(row.Rank, 10);
+                return {
+                    ...row,
+                    Rank: isNaN(rankNum) ? Infinity : rankNum
+                };
+            }).filter(row => row['Athlete Name']); // Ensure athlete name exists
+        }
+
+        /**
+         * Populate the class selector dropdown
+         */
+        function populateClasses() {
+            classSelector.innerHTML = ''; // Clear
+            
+            const allOption = document.createElement('option');
+            allOption.value = 'All Classes';
+            allOption.textContent = 'All Classes';
+            classSelector.appendChild(allOption);
+
+            Array.from(allClasses).sort().forEach(className => {
+                const option = document.createElement('option');
+                option.value = className;
+                option.textContent = className;
+                classSelector.appendChild(option);
+            });
+        }
+
+        /**
+        * Get a unique key for an athlete (Name + Nation)
+        */
+        function getAthleteKey(row) {
+            return `${row['Athlete Name']}|${row.Nation}`.toLowerCase();
+        }
+
+        /**
+         * Handle class selection change
+         */
+        function onClassChange(event) {
+            currentClass = event.target.value;
+            runAnalysis();
+        }
+
+        /**
+         * Filter data by the currently selected class
+         */
+        function filterByClass(data) {
+            if (currentClass === 'All Classes') {
+                return data;
+            }
+            return data.filter(row => row.Class === currentClass);
+        }
+
+        /**
+         * Main analysis function
+         */
+        function runAnalysis() {
+            // Filter data by selected class
+            const u23 = filterByClass(allData.u23);
+            const snr = filterByClass(allData.snr);
+            const og = filterByClass(allData.og);
+            const seniorEvents = [...snr, ...og];
+
+            // Run Part 1
+            const u23Ranks = [3, 5, 8, 12];
+            const part1Results = analyzeU23toSenior(u23, seniorEvents, u23Ranks);
+            
+            // Run Part 2
+            const snrRanks = [3, 5, 12, 16];
+            const part2Results = analyzeSeniorToU23(u23, snr, og, snrRanks);
+
+            // Update DOM
+            updateDOM(part1Results, part2Results);
+            
+            // Update Charts
+            updateCharts(part1Results, part2Results);
+
+            // NEW: Update Tables
+            updateTables(part1Results, part2Results);
+        }
+
+        /**
+         * Part 1: U23 -> Senior Analysis
+         */
+        function analyzeU23toSenior(u23Data, seniorEvents, ranks) {
+            const seniorMedalists = new Set();
+            seniorEvents
+                .filter(row => row.Rank <= 3)
+                .forEach(row => seniorMedalists.add(getAthleteKey(row)));
+
+            // NEW: Create a map of U23 athletes' best performances
+            const u23Details = new Map();
+            for (const row of u23Data) {
+                const key = getAthleteKey(row);
+                const bestRank = u23Details.get(key)?.bestRank || Infinity;
+                if (row.Rank < bestRank) {
+                    u23Details.set(key, { name: row['Athlete Name'], nation: row.Nation, bestRank: row.Rank });
+                }
+            }
+
+            const results = {};
+
+            for (const rank of ranks) {
+                const u23Group = new Set();
+                u23Data
+                    .filter(row => row.Rank <= rank)
+                    .forEach(row => u23Group.add(getAthleteKey(row)));
+
+                if (u23Group.size === 0) {
+                    results[rank] = { percent: 0, athletes: [] }; // Modified
+                    continue;
+                }
+
+                let conversionCount = 0;
+                let convertedAthletes = []; // NEW
+                for (const athleteKey of u23Group) {
+                    if (seniorMedalists.has(athleteKey)) {
+                        conversionCount++;
+                        const details = u23Details.get(athleteKey); // NEW
+                        if (details) {
+                            convertedAthletes.push(details); // NEW
+                        }
+                    }
+                }
+                
+                results[rank] = { // Modified
+                    percent: (conversionCount / u23Group.size) * 100,
+                    athletes: convertedAthletes.sort((a,b) => a.bestRank - b.bestRank) // Sort athletes by rank
+                };
+            }
+            return results;
+        }
+
+        /**
+         * Part 2: Senior -> U23 Analysis
+         */
+        function analyzeSeniorToU23(u23Data, snrData, ogData, ranks) {
+            // Filter senior events for 2016-2025
+            const relevantSnr = snrData.filter(row => row.Year >= 2016 && row.Year <= 2025);
+            const relevantOg = ogData.filter(row => row.Year >= 2016 && row.Year <= 2025);
+            const relevantSeniorEvents = [...relevantSnr, ...relevantOg];
+
+            // Create a map of athlete's best U23 rank
+            const u23BestRanks = new Map();
+            for (const row of u23Data) {
+                // *** FIX STARTS HERE ***
+                const key = getAthleteKey(row);
+                const currentBest = u23BestRanks.get(key) || Infinity;
+                // *** FIX ENDS HERE ***
+                if (row.Rank < currentBest) {
+                    u23BestRanks.set(key, row.Rank);
+                }
+            }
+
+            // NEW: Create a map of Senior athletes' best performances (2016-25)
+            const seniorDetails = new Map();
+            for (const row of relevantSeniorEvents) {
+                const key = getAthleteKey(row);
+                const bestRank = seniorDetails.get(key)?.bestRank || Infinity;
+                if (row.Rank < bestRank) {
+                    seniorDetails.set(key, { name: row['Athlete Name'], nation: row.Nation, bestRank: row.Rank });
+                }
+            }
+
+            const results = {};
+            for (const rank of ranks) {
+                const seniorGroup = new Set();
+                relevantSeniorEvents
+                    .filter(row => row.Rank <= rank)
+                    .forEach(row => seniorGroup.add(getAthleteKey(row)));
+                
+                const athleteU23Ranks = [];
+                const includedAthletes = []; // NEW
+                for (const athleteKey of seniorGroup) {
+                    const u23Rank = u23BestRanks.get(athleteKey);
+                    const seniorInfo = seniorDetails.get(athleteKey); // NEW
+
+                    if (u23Rank && u23Rank !== Infinity) {
+                        athleteU23Ranks.push(u23Rank);
+                        if(seniorInfo) includedAthletes.push({ ...seniorInfo, u23Rank: u23Rank }); // NEW
+                    } else if (seniorInfo) { // MODIFIED: Only add if seniorInfo exists
+                        includedAthletes.push({ ...seniorInfo, u23Rank: 'N/A' }); // NEW
+                    }
+                }
+
+                if (athleteU23Ranks.length === 0) {
+                    results[rank] = { avg: null, athletes: includedAthletes.sort((a,b) => a.bestRank - b.bestRank) }; // Modified
+                } else {
+                    const sum = athleteU23Ranks.reduce((a, b) => a + b, 0);
+                    results[rank] = { avg: sum / athleteU23Ranks.length, athletes: includedAthletes.sort((a,b) => a.bestRank - b.bestRank) }; // Modified
+                }
+            }
+            return results;
+        }
+
+        /**
+         * Update the stat tiles
+         */
+        function updateDOM(part1, part2) {
+            // Part 1
+            document.getElementById('stat-u23-3').textContent = `${part1[3].percent.toFixed(1)}%`;
+            document.getElementById('stat-u23-5').textContent = `${part1[5].percent.toFixed(1)}%`;
+            document.getElementById('stat-u23-8').textContent = `${part1[8].percent.toFixed(1)}%`;
+            document.getElementById('stat-u23-12').textContent = `${part1[12].percent.toFixed(1)}%`;
+
+            // Part 2
+            document.getElementById('stat-snr-3').textContent = part2[3].avg ? part2[3].avg.toFixed(1) : 'N/A';
+            document.getElementById('stat-snr-5').textContent = part2[5].avg ? part2[5].avg.toFixed(1) : 'N/A';
+            document.getElementById('stat-snr-12').textContent = part2[12].avg ? part2[12].avg.toFixed(1) : 'N/A';
+            document.getElementById('stat-snr-16').textContent = part2[16].avg ? part2[16].avg.toFixed(1) : 'N/A';
+        }
+
+        /**
+         * Update the charts
+         */
+        function updateCharts(part1, part2) {
+            // Chart 1
+            const ctx1 = document.getElementById('chart-u23-to-senior').getContext('2d');
+            if (charts.u23ToSenior) {
+                charts.u23ToSenior.destroy();
+            }
+            charts.u23ToSenior = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['U23 Top 3', 'U23 Top 5', 'U23 Top 8', 'U23 Top 12'],
+                    datasets: [{
+                        label: '% Conversion to Senior Medal',
+                        data: [part1[3].percent, part1[5].percent, part1[8].percent, part1[12].percent],
+                        backgroundColor: 'rgba(96, 165, 250, 0.6)', // blue-400
+                        borderColor: 'rgba(96, 165, 250, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'U23 to Senior Medal Conversion %' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: (value) => value + '%'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Chart 2
+            const ctx2 = document.getElementById('chart-senior-to-u23').getContext('2d');
+            if (charts.seniorToU23) {
+                charts.seniorToU23.destroy();
+            }
+            charts.seniorToU23 = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['Senior Top 3', 'Senior Top 5', 'Senior Top 12', 'Senior Top 16'],
+                    datasets: [{
+                        label: 'Average U23 Rank',
+                        data: [part2[3].avg, part2[5].avg, part2[12].avg, part2[16].avg],
+                        backgroundColor: 'rgba(52, 211, 153, 0.6)', // green-400
+                        borderColor: 'rgba(52, 211, 153, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Senior Performer\'s Average U23 Rank' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true, // Better to not start at 0 for rank
+                            reverse: true, // Lower rank is better
+                            title: { display: true, text: 'Average U23 Rank' }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * NEW: Update the athlete tables
+         */
+        function updateTables(part1, part2) {
+            const u23Body = document.getElementById('table-u23-body');
+            const snrBody = document.getElementById('table-snr-body');
+            
+            // Part 1
+            const u23Athletes = part1[12].athletes; // Already sorted in analysis function
+            if (u23Athletes.length === 0) {
+                u23Body.innerHTML = '<tr><td colspan="3" class="py-4 px-4 text-gray-500 text-center">No converting athletes found for this class.</td></tr>';
+            } else {
+                u23Body.innerHTML = u23Athletes.map(a => `
+                    <tr class="hover:bg-gray-700">
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.name}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.nation}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.bestRank}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Part 2
+            const snrAthletes = part2[16].athletes; // Already sorted in analysis function
+            if (snrAthletes.length === 0) {
+                snrBody.innerHTML = '<tr><td colspan="4" class="py-4 px-4 text-gray-500 text-center">No senior athletes found for this class.</td></tr>';
+            } else {
+                snrBody.innerHTML = snrAthletes.map(a => `
+                    <tr class="hover:bg-gray-700">
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.name}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.nation}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.bestRank}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${a.u23Rank}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    </script>
+</body>
+</html>
