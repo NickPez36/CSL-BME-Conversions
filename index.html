@@ -176,6 +176,80 @@
                 </section>
 
             </div>
+
+            <!-- NEW SECTION: Part 3 -->
+            <section class="bg-gray-800 p-6 rounded-lg shadow-lg mt-8 lg:col-span-2">
+                <div class="flex flex-col md:flex-row justify-between md:items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-center md:text-left text-yellow-300">
+                            Part 3: Same-Year U23 Medalist Conversion
+                        </h2>
+                        <p class="text-center md:text-left text-gray-400 mb-4 md:mb-0">
+                            What was the Senior/Olympic rank for U23 Medalists in the *same year*?
+                        </p>
+                    </div>
+                    <div class="flex items-center justify-center">
+                        <label for="year-selector" class="text-lg font-medium mr-4">Select Year:</label>
+                        <select id="year-selector" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 p-2.5">
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Part 3 Stat Tiles -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-medal">--%</div>
+                        <div class="text-sm text-gray-400">Senior Medalist</div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-top5">--%</div>
+                        <div class="text-sm text-gray-400">Senior Top 5 (4-5)</div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-top8">--%</div>
+                        <div class="text-sm text-gray-400">Senior Top 8 (6-8)</div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-top12">--%</div>
+                        <div class="text-sm text-gray-400">Senior Top 12 (9-12)</div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-top12plus">--%</div>
+                        <div class="text-sm text-gray-400">Senior 12+</div>
+                    </div>
+                    <div class="bg-gray-900 p-4 rounded-lg text-center shadow-inner">
+                        <div class="text-3xl font-bold text-yellow-400" id="stat-same-dnc">--%</div>
+                        <div class="text-sm text-gray-400">Did Not Compete (Snr)</div>
+                    </div>
+                </div>
+
+                <!-- Part 3 Chart -->
+                <div class="mb-6">
+                    <canvas id="chart-same-year"></canvas>
+                </div>
+
+                <!-- Part 3 Table -->
+                <h3 class="text-lg font-semibold mt-8 mb-2 text-center text-gray-300" id="table-part3-title">U23 Medalists & Same-Year Senior Rank</h3>
+                <div class="h-64 overflow-y-auto bg-gray-900 rounded-lg border border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-800 sticky top-0">
+                            <!-- NEW: Table header is now dynamic -->
+                            <tr id="table-part3-head-row">
+                                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Athlete</th>
+                                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nation</th>
+                                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Class</th>
+                                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">U23 Rank</th>
+                                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Senior Rank</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-same-year-body" class="divide-y divide-gray-700">
+                            <!-- JS will populate -->
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
         </main>
     </div>
 
@@ -200,10 +274,13 @@
             og: []
         };
         let allClasses = new Set();
+        let allYears = new Set(); // NEW
         let currentClass = 'All Classes';
+        let currentYear = null; // NEW: Will be set to latest year
         const charts = {
             u23ToSenior: null,
-            seniorToU23: null
+            seniorToU23: null,
+            sameYearConversion: null // NEW
         };
 
         // DOM Elements
@@ -212,6 +289,7 @@
         const errorMsgEl = document.getElementById('error-message');
         const dashboardEl = document.getElementById('dashboard');
         const classSelector = document.getElementById('class-selector');
+        const yearSelector = document.getElementById('year-selector'); // NEW
 
         /**
          * Wait for DOM to load, then fetch data
@@ -219,6 +297,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadAllData();
             classSelector.addEventListener('change', onClassChange);
+            yearSelector.addEventListener('change', onYearChange); // NEW
         });
 
         /**
@@ -253,9 +332,12 @@
 
                 // Populate class selector
                 populateClasses();
+                // NEW: Populate year selector
+                populateYears();
 
                 // Run initial analysis
-                runAnalysis();
+                runPart1And2Analysis();
+                runPart3Analysis(); // NEW
 
                 // Show dashboard
                 loadingEl.style.display = 'none';
@@ -283,11 +365,17 @@
                 if (row.Class) {
                     allClasses.add(row.Class);
                 }
+                // NEW: Collect all years
+                const yearNum = parseInt(row.Year, 10); // Parse year once
+                if (!isNaN(yearNum)) {
+                    allYears.add(yearNum);
+                }
                 // Convert Rank to number, handle 'DQ', 'DNF' etc. as Infinity
                 const rankNum = parseInt(row.Rank, 10);
                 return {
                     ...row,
-                    Rank: isNaN(rankNum) ? Infinity : rankNum
+                    Rank: isNaN(rankNum) ? Infinity : rankNum,
+                    Year: isNaN(yearNum) ? null : yearNum // Store Year as a number
                 };
             }).filter(row => row['Athlete Name']); // Ensure athlete name exists
         }
@@ -312,10 +400,39 @@
         }
 
         /**
+         * NEW: Populate the year selector dropdown
+         */
+        function populateYears() {
+            yearSelector.innerHTML = ''; // Clear
+            
+            // REFINEMENT: Get years ONLY from the U23 data
+            const u23Years = new Set(allData.u23.map(row => row.Year).filter(year => year !== null));
+            const sortedYears = Array.from(u23Years).sort((a, b) => b - a); // Descending
+            
+            if (sortedYears.length > 0) {
+                currentYear = sortedYears[0]; // Set default to latest year
+            } else {
+                currentYear = new Date().getFullYear(); // Fallback
+            }
+
+            sortedYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelector.appendChild(option);
+            });
+            yearSelector.value = currentYear; // Set dropdown to default
+        }
+
+        /**
         * Get a unique key for an athlete (Name + Nation)
         */
         function getAthleteKey(row) {
-            return `${row['Athlete Name']}|${row.Nation}`.toLowerCase();
+            // NEW: Trim whitespace and handle potential undefined values to create a robust key
+            // Handles both original row format {'Athlete Name': '...'} and u23Entry format {name: '...'}
+            const name = (row['Athlete Name'] || row.name || '').trim();
+            const nation = (row.Nation || row.nation || '').trim();
+            return `${name}|${nation}`.toLowerCase();
         }
 
         /**
@@ -323,7 +440,15 @@
          */
         function onClassChange(event) {
             currentClass = event.target.value;
-            runAnalysis();
+            runPart1And2Analysis();
+        }
+
+        /**
+         * NEW: Handle year selection change
+         */
+        function onYearChange(event) {
+            currentYear = parseInt(event.target.value, 10);
+            runPart3Analysis();
         }
 
         /**
@@ -337,9 +462,9 @@
         }
 
         /**
-         * Main analysis function
+         * Main analysis function for Parts 1 & 2
          */
-        function runAnalysis() {
+        function runPart1And2Analysis() {
             // Filter data by selected class
             const u23 = filterByClass(allData.u23);
             const snr = filterByClass(allData.snr);
@@ -362,6 +487,21 @@
 
             // NEW: Update Tables
             updateTables(part1Results, part2Results);
+        }
+
+        /**
+         * NEW: Main analysis function for Part 3
+         */
+        function runPart3Analysis() {
+            if (!currentYear) return; // Don't run if no year is set
+
+            // Part 3 analysis doesn't filter by class, only by year
+            const part3Results = analyzeSameYearConversion(currentYear);
+            
+            // Update new DOM elements
+            updatePart3DOM(part3Results);
+            updatePart3Chart(part3Results);
+            updatePart3Table(part3Results);
         }
 
         /**
@@ -420,62 +560,178 @@
          * Part 2: Senior -> U23 Analysis
          */
         function analyzeSeniorToU23(u23Data, snrData, ogData, ranks) {
-            // Filter senior events for 2016-2025
-            const relevantSnr = snrData.filter(row => row.Year >= 2016 && row.Year <= 2025);
-            const relevantOg = ogData.filter(row => row.Year >= 2016 && row.Year <= 2025);
-            const relevantSeniorEvents = [...relevantSnr, ...relevantOg];
-
-            // Create a map of athlete's best U23 rank
-            const u23BestRanks = new Map();
-            for (const row of u23Data) {
-                // *** FIX STARTS HERE ***
+            // 1. Create a map of every athlete's best U23 rank
+            const u23BestRankMap = new Map();
+            u23Data.forEach(row => {
                 const key = getAthleteKey(row);
-                const currentBest = u23BestRanks.get(key) || Infinity;
-                // *** FIX ENDS HERE ***
+                // Fix from previous bug: define currentBest
+                const currentBest = u23BestRankMap.get(key) || Infinity;
                 if (row.Rank < currentBest) {
-                    u23BestRanks.set(key, row.Rank);
+                    u23BestRankMap.set(key, row.Rank);
                 }
-            }
+            });
 
-            // NEW: Create a map of Senior athletes' best performances (2016-25)
-            const seniorDetails = new Map();
-            for (const row of relevantSeniorEvents) {
-                const key = getAthleteKey(row);
-                const bestRank = seniorDetails.get(key)?.bestRank || Infinity;
-                if (row.Rank < bestRank) {
-                    seniorDetails.set(key, { name: row['Athlete Name'], nation: row.Nation, bestRank: row.Rank });
-                }
-            }
+            // 2. Get all senior athletes (2016-2025) and their best rank
+            const seniorEvents = [...snrData, ...ogData];
+            const seniorPerformers = new Map();
+            seniorEvents
+                .filter(row => row.Year >= 2016 && row.Year <= 2025)
+                .forEach(row => {
+                    const key = getAthleteKey(row);
+                    const currentBest = seniorPerformers.get(key)?.bestRank || Infinity;
+                    if (row.Rank < currentBest) {
+                        seniorPerformers.set(key, { 
+                            name: row['Athlete Name'], 
+                            nation: row.Nation, 
+                            bestRank: row.Rank 
+                        });
+                    }
+                });
 
             const results = {};
+            
+            // 3. Analyze for each rank bracket
             for (const rank of ranks) {
                 const seniorGroup = new Set();
-                relevantSeniorEvents
-                    .filter(row => row.Rank <= rank)
-                    .forEach(row => seniorGroup.add(getAthleteKey(row)));
-                
-                const athleteU23Ranks = [];
-                const includedAthletes = []; // NEW
-                for (const athleteKey of seniorGroup) {
-                    const u23Rank = u23BestRanks.get(athleteKey);
-                    const seniorInfo = seniorDetails.get(athleteKey); // NEW
+                const athletesInGroup = []; // For the table
 
+                seniorPerformers.forEach((details, key) => {
+                    if (details.bestRank <= rank) {
+                        seniorGroup.add(key);
+                        
+                        // Find this athlete's U23 rank
+                        const u23Rank = u23BestRankMap.get(key) || 'N/A';
+                        athletesInGroup.push({
+                            ...details,
+                            u23Rank: u23Rank === Infinity ? 'N/A' : u23Rank
+                        });
+                    }
+                });
+
+                if (seniorGroup.size === 0) {
+                    results[rank] = { avg: null, athletes: [] };
+                    continue;
+                }
+
+                let totalRank = 0;
+                let countWithRank = 0;
+                
+                for (const athleteKey of seniorGroup) {
+                    const u23Rank = u23BestRankMap.get(athleteKey);
                     if (u23Rank && u23Rank !== Infinity) {
-                        athleteU23Ranks.push(u23Rank);
-                        if(seniorInfo) includedAthletes.push({ ...seniorInfo, u23Rank: u23Rank }); // NEW
-                    } else if (seniorInfo) { // MODIFIED: Only add if seniorInfo exists
-                        includedAthletes.push({ ...seniorInfo, u23Rank: 'N/A' }); // NEW
+                        totalRank += u23Rank;
+                        countWithRank++;
                     }
                 }
 
-                if (athleteU23Ranks.length === 0) {
-                    results[rank] = { avg: null, athletes: includedAthletes.sort((a,b) => a.bestRank - b.bestRank) }; // Modified
-                } else {
-                    const sum = athleteU23Ranks.reduce((a, b) => a + b, 0);
-                    results[rank] = { avg: sum / athleteU23Ranks.length, athletes: includedAthletes.sort((a,b) => a.bestRank - b.bestRank) }; // Modified
-                }
+                results[rank] = {
+                    avg: countWithRank > 0 ? (totalRank / countWithRank) : null,
+                    athletes: athletesInGroup.sort((a,b) => a.bestRank - b.bestRank)
+                };
             }
             return results;
+        }
+
+        /**
+         * NEW: Helper function to categorize a single senior performance for Part 3
+         */
+        function categorizePerformance(snrRank, overallCounts, chartData, className) {
+            let bucket = 'dnc';
+            if (snrRank <= 3) bucket = 'medal';
+            else if (snrRank <= 5) bucket = 'top5'; // Ranks 4-5
+            else if (snrRank <= 8) bucket = 'top8'; // Ranks 6-8
+            else if (snrRank <= 12) bucket = 'top12'; // Ranks 9-12
+            else if (snrRank !== 'DNC') bucket = 'top12plus'; // Ranks 13+
+
+            // Increment overall counts
+            overallCounts[bucket]++;
+            overallCounts.total++;
+
+            // Increment chart data counts (by class)
+            if (!chartData[className]) {
+                chartData[className] = { medal: 0, top5: 0, top8: 0, top12: 0, top12plus: 0, dnc: 0, total: 0 };
+            }
+            chartData[className][bucket]++;
+            chartData[className].total++;
+        }
+
+
+        /**
+         * NEW: Part 3: Same-Year Conversion Analysis (Major Logic Update)
+         */
+        function analyzeSameYearConversion(year) {
+            const snrDataForYear = allData.snr.filter(row => row.Year === year);
+            const ogDataForYear = allData.og.filter(row => row.Year === year);
+            const isOlympicYear = ogDataForYear.length > 0;
+
+            // 1. Find all U23 Medalist *entries* for the selected year.
+            const u23MedalistEntries = [];
+            allData.u23
+                .filter(row => row.Year === year && row.Rank <= 3)
+                .forEach(row => {
+                    u23MedalistEntries.push({
+                        name: row['Athlete Name'],
+                        nation: row.Nation,
+                        class: row.Class,
+                        u23Rank: row.Rank
+                    });
+                });
+
+            // 2. Create a map of *Worlds* performances for the year
+            const snrRankMap = new Map();
+            snrDataForYear.forEach(row => {
+                const key = getAthleteKey(row);
+                const bestRank = snrRankMap.get(key) || Infinity;
+                if (row.Rank < bestRank) {
+                    snrRankMap.set(key, row.Rank);
+                }
+            });
+            
+            // 3. Create a map of *Olympic* performances for the year
+            const ogRankMap = new Map();
+            ogDataForYear.forEach(row => {
+                const key = getAthleteKey(row);
+                const bestRank = ogRankMap.get(key) || Infinity;
+                if (row.Rank < bestRank) {
+                    ogRankMap.set(key, row.Rank);
+                }
+            });
+
+            // 4. Iterate U23 medalist entries and find their ranks at *both* events
+            const athleteResults = []; // For the table
+            const chartData = {}; // For the stacked bar chart
+            const overallCounts = { medal: 0, top5: 0, top8: 0, top12: 0, top12plus: 0, dnc: 0, total: 0 };
+
+            for (const u23Entry of u23MedalistEntries) {
+                const key = getAthleteKey(u23Entry);
+                const worldsRank = snrRankMap.get(key) || 'DNC';
+                const olympicRank = ogRankMap.get(key) || 'DNC';
+
+                // A. Store result for the *table* (one row per athlete)
+                athleteResults.push({ ...u23Entry, worldsRank, olympicRank });
+
+                // B. Categorize for *stats/chart* (one per *opportunity*)
+                categorizePerformance(worldsRank, overallCounts, chartData, u23Entry.class);
+                
+                // If it's an Olympic year, categorize the second opportunity
+                if (isOlympicYear) {
+                    categorizePerformance(olympicRank, overallCounts, chartData, u23Entry.class);
+                }
+            }
+            
+            // 5. Calculate overall percentages (based on total opportunities)
+            const percentages = {};
+            for (const key of Object.keys(overallCounts)) {
+                if (key === 'total') continue;
+                percentages[key] = (overallCounts.total === 0) ? 0 : (overallCounts[key] / overallCounts.total) * 100;
+            }
+            
+            return {
+                percentages,
+                chartData,
+                athletes: athleteResults.sort((a,b) => a.u23Rank - b.u23Rank),
+                isOlympicYear: isOlympicYear // Pass this to the DOM update function
+            };
         }
 
         /**
@@ -493,6 +749,19 @@
             document.getElementById('stat-snr-5').textContent = part2[5].avg ? part2[5].avg.toFixed(1) : 'N/A';
             document.getElementById('stat-snr-12').textContent = part2[12].avg ? part2[12].avg.toFixed(1) : 'N/A';
             document.getElementById('stat-snr-16').textContent = part2[16].avg ? part2[16].avg.toFixed(1) : 'N/A';
+        }
+
+        /**
+         * NEW: Update Part 3 stat tiles
+         */
+        function updatePart3DOM(part3) {
+            const p = part3.percentages;
+            document.getElementById('stat-same-medal').textContent = `${p.medal.toFixed(0)}%`;
+            document.getElementById('stat-same-top5').textContent = `${p.top5.toFixed(0)}%`;
+            document.getElementById('stat-same-top8').textContent = `${p.top8.toFixed(0)}%`;
+            document.getElementById('stat-same-top12').textContent = `${p.top12.toFixed(0)}%`;
+            document.getElementById('stat-same-top12plus').textContent = `${p.top12plus.toFixed(0)}%`;
+            document.getElementById('stat-same-dnc').textContent = `${p.dnc.toFixed(0)}%`;
         }
 
         /**
@@ -569,6 +838,75 @@
         }
 
         /**
+         * NEW: Update Part 3 Chart
+         */
+        function updatePart3Chart(part3) {
+            const ctx = document.getElementById('chart-same-year').getContext('2d');
+            if (charts.sameYearConversion) {
+                charts.sameYearConversion.destroy();
+            }
+
+            const chartData = part3.chartData;
+            const labels = Object.keys(chartData).sort(); // All classes with U23 medalists
+
+            const datasets = [
+                {
+                    label: 'Senior Medal (1-3)',
+                    data: labels.map(cls => chartData[cls].medal),
+                    backgroundColor: 'rgba(250, 204, 21, 0.7)', // yellow-400
+                },
+                {
+                    label: 'Senior Top 5 (4-5)',
+                    data: labels.map(cls => chartData[cls].top5),
+                    backgroundColor: 'rgba(245, 158, 11, 0.7)', // amber-500
+                },
+                {
+                    label: 'Senior Top 8 (6-8)',
+                    data: labels.map(cls => chartData[cls].top8),
+                    backgroundColor: 'rgba(234, 88, 12, 0.7)', // orange-600
+                },
+                {
+                    label: 'Senior Top 12 (9-12)',
+                    data: labels.map(cls => chartData[cls].top12),
+                    backgroundColor: 'rgba(124, 58, 237, 0.7)', // purple-600
+                },
+                {
+                    label: 'Senior 12+',
+                    data: labels.map(cls => chartData[cls].top12plus),
+                    backgroundColor: 'rgba(107, 114, 128, 0.7)', // gray-500
+                },
+                {
+                    label: 'Did Not Compete (Snr)',
+                    data: labels.map(cls => chartData[cls].dnc),
+                    backgroundColor: 'rgba(55, 65, 81, 0.7)', // gray-700
+                }
+            ];
+
+            charts.sameYearConversion = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: `Same-Year Conversion by Class (${currentYear})` },
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: { display: true, text: 'Athlete Class' }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: { display: true, text: 'Count of U23 Medalists' }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
          * NEW: Update the athlete tables
          */
         function updateTables(part1, part2) {
@@ -602,6 +940,63 @@
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${a.u23Rank}</td>
                     </tr>
                 `).join('');
+            }
+        }
+
+        /**
+         * NEW: Update Part 3 Table (Now dynamic for Olympic years)
+         */
+        function updatePart3Table(part3) {
+            const headRow = document.getElementById('table-part3-head-row');
+            const tableBody = document.getElementById('table-same-year-body');
+            document.getElementById('table-part3-title').textContent = `U23 Medalists & Same-Year Senior Rank (${currentYear})`;
+            
+            const athletes = part3.athletes;
+            const isOlympicYear = part3.isOlympicYear;
+
+            // 1. Update Table Header based on year
+            let headerHtml = `
+                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Athlete</th>
+                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nation</th>
+                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Class</th>
+                <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">U23 Rank</th>
+            `;
+            
+            if (isOlympicYear) {
+                headerHtml += `
+                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Worlds Rank</th>
+                    <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Olympic Rank</th>
+                `;
+            } else {
+                headerHtml += `<th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Senior Rank</th>`;
+            }
+            headRow.innerHTML = headerHtml;
+
+            // 2. Update Table Body
+            if (athletes.length === 0) {
+                const colSpan = isOlympicYear ? 6 : 5;
+                tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="py-4 px-4 text-gray-500 text-center">No U23 medalists found for this year.</td></tr>`;
+            } else {
+                let bodyHtml = '';
+                for (const a of athletes) {
+                    bodyHtml += `
+                        <tr class="hover:bg-gray-700">
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.name}</td>
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.nation}</td>
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.class}</td>
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.u23Rank}</td>
+                    `;
+                    if (isOlympicYear) {
+                        bodyHtml += `
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.worldsRank}</td>
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${a.olympicRank}</td>
+                        `;
+                    } else {
+                        bodyHtml += `<td class="py-3 px-4 text-sm whitespace-nowrap">${a.worldsRank}</td>`; // worldsRank holds the only snr rank
+                    }
+                    bodyHtml += `</tr>`;
+                }
+                tableBody.innerHTML = bodyHtml;
             }
         }
     </script>
